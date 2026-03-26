@@ -11,3 +11,4 @@
 [ ] implement log compaction / snapshotting
 [ ] implement InstallSnapshot RPC
 [ ] implement cluster membership changes
+[ ] implement client library (handles redirections, retries)
