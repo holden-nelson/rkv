@@ -65,7 +65,7 @@ example response:
   {
     "id": "node-2",
     "role": "follower",
-    "location": "http://node-2:9091/",
+    "location": "http:/node-2:9091/",
     "term": 42,
     "commit_index": 1231
   },
@@ -81,20 +81,14 @@ example response:
 
 ## Cluster management / configuration
 
-Each node in the cluster has an associated configuration file. A full, commented, example starter config is here: [example_node_config.toml](example_node_config.toml).
+The cluster has an associated configuration file. A full, commented, example starter config is here: [example_cluster_config.toml](example_cluster_config.toml).
 
 A basic config could look like:
 
 ```TOML
-node_id = "node1"
-client_addr = "127.0.0.1:8081"
-raft_addr = "127.0.0.1:9001"
-data_dir = "./data/node1"
-
-[cluster]
-peers = [
-  { id = "node1", raft_addr = "127.0.0.1:9001" },
-  { id = "node2", raft_addr = "127.0.0.1:9002" },
-  { id = "node3", raft_addr = "127.0.0.1:9003" },
+members = [
+  { id = "node1", raft_addr = "127.0.0.1:9001", client_addr = "127.0.0.1:8081" },
+  { id = "node2", raft_addr = "127.0.0.1:9002", client_addr = "127.0.0.1:8082" },
+  { id = "node3", raft_addr = "127.0.0.1:9003", client_addr = "127.0.0.1:8083" }
 ]
 ```
