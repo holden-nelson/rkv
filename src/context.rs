@@ -1,8 +1,10 @@
 use std::{net::SocketAddr, path::PathBuf};
 
+use anyhow::Context;
 use directories::ProjectDirs;
+use thiserror::Error;
 
-use crate::config::config::{self, Config};
+use crate::config::{self, Config};
 
 #[derive(Debug)]
 pub struct NodeContext {
@@ -11,7 +13,7 @@ pub struct NodeContext {
     raft_addr: SocketAddr,
     role: NodeRole,
 
-    persistence: PersistenceContext,
+    pub persistence: PersistenceContext,
     peers: Vec<ClusterMember>,
 }
 
@@ -24,7 +26,7 @@ pub enum NodeRole {
 
 #[derive(Debug)]
 pub struct PersistenceContext {
-    base_dir: PathBuf,
+    pub base_dir: PathBuf,
 }
 
 #[derive(Debug)]
@@ -41,25 +43,35 @@ pub enum MemberValidationResult {
     InvalidClientAddr(String),
 }
 
-#[derive(Debug)]
-pub enum ClusterValidationResult {
-    Success(NodeContext),
-    EvenMembersWarning(NodeContext, usize),
+#[derive(Debug, Error)]
+pub enum ClusterValidationError {
+    #[error("invalid cluster member: {0:?}")]
     InvalidClusterMember(MemberValidationResult),
+
+    #[error("node id '{0}' was not found in cluster members")]
     InvalidId(String),
+
+    #[error("duplicate node id '{0}' found in cluster members")]
     DuplicateIds(String),
 }
 
 impl NodeContext {
-    pub fn from_config(cfg: Config, node_id: &str) -> ClusterValidationResult {
-        let binding = ProjectDirs::from("", "", "rkv").expect("failed to open project dir");
-        let proj_path = binding.data_local_dir();
+    pub fn from_config(cfg: Config, node_id: &str) -> anyhow::Result<NodeContext> {
+        let proj_dirs = ProjectDirs::from("", "", "rkv")
+            .context("could not determine project directories for app 'rkv'")?;
+
+        let proj_path = proj_dirs.data_local_dir();
 
         from_config_with(cfg, node_id, proj_path.to_path_buf())
+            .with_context(|| format!("failed to build NodeContext for node_id='{node_id}'"))
     }
 }
 
-fn from_config_with(cfg: Config, node_id: &str, project_path: PathBuf) -> ClusterValidationResult {
+fn from_config_with(
+    cfg: Config,
+    node_id: &str,
+    project_path: PathBuf,
+) -> Result<NodeContext, ClusterValidationError> {
     let mut peers = vec![];
 
     let mut this_member: Option<ClusterMember> = None;
@@ -68,19 +80,19 @@ fn from_config_with(cfg: Config, node_id: &str, project_path: PathBuf) -> Cluste
             MemberValidationResult::Success(member) => {
                 if member.id == node_id {
                     if this_member.is_some() {
-                        return ClusterValidationResult::DuplicateIds(node_id.to_string());
+                        return Err(ClusterValidationError::DuplicateIds(node_id.to_string()));
                     }
                     this_member = Some(member);
                 } else {
                     peers.push(member);
                 }
             }
-            other => return ClusterValidationResult::InvalidClusterMember(other),
+            other => return Err(ClusterValidationError::InvalidClusterMember(other)),
         }
     }
 
     if this_member.is_none() {
-        return ClusterValidationResult::InvalidId(node_id.to_string());
+        return Err(ClusterValidationError::InvalidId(node_id.to_string()));
     }
 
     let data_dir = project_path.join("member-data").join(node_id);
@@ -96,12 +108,7 @@ fn from_config_with(cfg: Config, node_id: &str, project_path: PathBuf) -> Cluste
         peers: peers,
     };
 
-    let num_peers = context.peers.len();
-    if num_peers % 2 == 1 {
-        return ClusterValidationResult::EvenMembersWarning(context, num_peers + 1);
-    }
-
-    return ClusterValidationResult::Success(context);
+    Ok(context)
 }
 
 fn validate_config_member(member: &config::ClusterMember) -> MemberValidationResult {
@@ -124,15 +131,10 @@ fn validate_config_member(member: &config::ClusterMember) -> MemberValidationRes
     })
 }
 
-fn build_data_dir(node_id: &str) -> Option<PathBuf> {
-    let proj_dir = ProjectDirs::from("", "", "rkv")?;
-    Some(proj_dir.data_local_dir().join("member-data").join(node_id))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::config;
+    use crate::config;
     use std::{env, net::SocketAddr, path::PathBuf};
 
     fn stub_project_path() -> PathBuf {
@@ -199,7 +201,7 @@ mod tests {
         };
 
         match from_config_with(cfg, "n3", stub_project_path()) {
-            ClusterValidationResult::InvalidId(id) => assert_eq!(id, "n3"),
+            Err(ClusterValidationError::InvalidId(id)) => assert_eq!(id, "n3"),
             other => panic!("expected InvalidId, got {other:?}"),
         }
     }
@@ -215,7 +217,7 @@ mod tests {
         };
 
         match from_config_with(cfg, "n1", stub_project_path()) {
-            ClusterValidationResult::DuplicateIds(id) => assert_eq!(id, "n1"),
+            Err(ClusterValidationError::DuplicateIds(id)) => assert_eq!(id, "n1"),
             other => panic!("expected DuplicateIds, got {other:?}"),
         }
     }
@@ -235,59 +237,10 @@ mod tests {
         };
 
         match from_config_with(cfg, "n1", stub_project_path()) {
-            ClusterValidationResult::InvalidClusterMember(
+            Err(ClusterValidationError::InvalidClusterMember(
                 MemberValidationResult::InvalidClientAddr(s),
-            ) => assert_eq!(s, "definitely-not-an-addr"),
+            )) => assert_eq!(s, "definitely-not-an-addr"),
             other => panic!("expected InvalidClusterMember(InvalidClientAddr), got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn from_config_with_warns_on_even_member_count() {
-        // Total members = 2 => peers.len() for a node = 1 (odd) => EvenMembersWarning(..., 2)
-        let cfg = config::Config {
-            members: vec![cfg_member("n1", 7001, 7000), cfg_member("n2", 8001, 8000)],
-        };
-
-        match from_config_with(cfg, "n1", stub_project_path()) {
-            ClusterValidationResult::EvenMembersWarning(ctx, total) => {
-                assert_eq!(total, 2);
-                assert_eq!(ctx.id, "n1");
-                assert!(matches!(ctx.role, NodeRole::Follower));
-                assert_eq!(ctx.peers.len(), 1);
-                assert_eq!(ctx.peers[0].id, "n2");
-            }
-            other => panic!("expected EvenMembersWarning, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn from_config_with_succeeds_on_odd_member_count() {
-        // Total members = 3 => peers.len() for a node = 2 (even) => Success
-        let cfg = config::Config {
-            members: vec![
-                cfg_member("n1", 7001, 7000),
-                cfg_member("n2", 8001, 8000),
-                cfg_member("n3", 9001, 9000),
-            ],
-        };
-
-        match from_config_with(cfg, "n1", stub_project_path()) {
-            ClusterValidationResult::Success(ctx) => {
-                assert_eq!(ctx.id, "n1");
-                assert!(matches!(ctx.role, NodeRole::Follower));
-                assert_eq!(ctx.peers.len(), 2);
-                assert!(ctx.peers.iter().any(|m| m.id == "n2"));
-                assert!(ctx.peers.iter().any(|m| m.id == "n3"));
-
-                // Ensure the persistence path is derived from the injected project_path + node id.
-                assert!(
-                    ctx.persistence
-                        .base_dir
-                        .ends_with(PathBuf::from("member-data").join("n1"))
-                );
-            }
-            other => panic!("expected Success, got {other:?}"),
         }
     }
 }

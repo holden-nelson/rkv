@@ -28,57 +28,6 @@ Body: baz
 
 stores `baz` under key `foo/bar`.
 
-There are also health and cluster info endpoints:
-
-```http
-GET /healthz
-```
-
-example response:
-
-```json
-{
-  "node_id": "node-1",
-  "role": "leader",
-  "term": 42,
-  "commit_index": 1234
-}
-```
-
-and
-
-```http
-GET /cluster
-```
-
-example response:
-
-```json
-[
-  {
-    "id": "node-1",
-    "role": "leader",
-    "location": "http://node-1:9091/",
-    "term": 42,
-    "commit_index": 1234
-  },
-  {
-    "id": "node-2",
-    "role": "follower",
-    "location": "http:/node-2:9091/",
-    "term": 42,
-    "commit_index": 1231
-  },
-  {
-    "id": "node-3",
-    "role": "follower",
-    "location": "http://node-3:9091/",
-    "term": 41,
-    "commit_index": 1200
-  }
-]
-```
-
 ## Cluster management / configuration
 
 The cluster has an associated configuration file. A full, commented, example starter config is here: [example_cluster_config.toml](example_cluster_config.toml).

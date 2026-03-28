@@ -1,13 +1,14 @@
+use anyhow::Result;
+
+use crate::bootstrap::bootstrap_node;
+
+mod bootstrap;
 mod config;
 mod context;
+mod core;
 
-use crate::{config::load_config, context::context::NodeContext};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = load_config("example_cluster_config.toml")?;
-    let context = NodeContext::from_config(config, "node2");
-
-    let _ = dbg!(context);
+fn main() -> Result<()> {
+    bootstrap_node()?;
 
     Ok(())
 }

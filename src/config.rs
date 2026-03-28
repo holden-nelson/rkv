@@ -1,3 +1,4 @@
+use anyhow::Result;
 use serde::Deserialize;
 use std::{fs, path::Path};
 
@@ -15,7 +16,7 @@ pub struct ClusterMember {
     pub raft_addr: String,
 }
 
-pub fn load_config(path: impl AsRef<Path>) -> Result<Config, Box<dyn std::error::Error>> {
+pub fn load_config(path: impl AsRef<Path>) -> Result<Config> {
     let s = fs::read_to_string(path)?;
     let cfg: Config = toml::from_str(&s)?;
     Ok(cfg)
