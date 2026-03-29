@@ -8,13 +8,14 @@ use crate::config::{self, Config};
 
 #[derive(Debug)]
 pub struct NodeContext {
-    id: String,
-    client_addr: SocketAddr,
-    raft_addr: SocketAddr,
-    role: NodeRole,
+    pub id: String,
+    pub client_addr: SocketAddr,
+    pub raft_addr: SocketAddr,
+    pub role: NodeRole,
+    pub election_timeout_ms: u32,
 
     pub persistence: PersistenceContext,
-    peers: Vec<ClusterMember>,
+    pub peers: Vec<ClusterMember>,
 }
 
 #[derive(Debug)]
@@ -31,9 +32,9 @@ pub struct PersistenceContext {
 
 #[derive(Debug)]
 pub struct ClusterMember {
-    id: String,
-    client_addr: SocketAddr,
-    raft_addr: SocketAddr,
+    pub id: String,
+    pub client_addr: SocketAddr,
+    pub raft_addr: SocketAddr,
 }
 
 #[derive(Debug)]
@@ -53,6 +54,9 @@ pub enum ClusterValidationError {
 
     #[error("duplicate node id '{0}' found in cluster members")]
     DuplicateIds(String),
+
+    #[error("min election timeout ({0}) cannot be greater than max ({1})")]
+    InvalidElectionTimeout(u32, u32),
 }
 
 impl NodeContext {
@@ -99,10 +103,16 @@ fn from_config_with(
 
     let this_member = this_member.unwrap();
 
+    let election_timeout = generate_election_timeout_ms(
+        cfg.election_timeout.minimum_ms,
+        cfg.election_timeout.maximum_ms,
+    )?;
+
     let context = NodeContext {
         id: this_member.id,
         client_addr: this_member.client_addr,
         raft_addr: this_member.raft_addr,
+        election_timeout_ms: election_timeout,
         role: NodeRole::Follower,
         persistence: PersistenceContext { base_dir: data_dir },
         peers: peers,
@@ -131,10 +141,18 @@ fn validate_config_member(member: &config::ClusterMember) -> MemberValidationRes
     })
 }
 
+fn generate_election_timeout_ms(min: u32, max: u32) -> Result<u32, ClusterValidationError> {
+    if min > max {
+        return Err(ClusterValidationError::InvalidElectionTimeout(min, max));
+    }
+
+    Ok(rand::random_range(min..=max))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config;
+    use crate::config::{self, ElectionTimeoutConfig};
     use std::{env, net::SocketAddr, path::PathBuf};
 
     fn stub_project_path() -> PathBuf {
@@ -198,6 +216,10 @@ mod tests {
     fn from_config_with_returns_invalid_id_when_missing() {
         let cfg = config::Config {
             members: vec![cfg_member("n1", 7001, 7000), cfg_member("n2", 8001, 8000)],
+            election_timeout: ElectionTimeoutConfig {
+                minimum_ms: 300,
+                maximum_ms: 500,
+            },
         };
 
         match from_config_with(cfg, "n3", stub_project_path()) {
@@ -214,6 +236,10 @@ mod tests {
                 cfg_member("n1", 7002, 7002),
                 cfg_member("n2", 8001, 8000),
             ],
+            election_timeout: ElectionTimeoutConfig {
+                minimum_ms: 300,
+                maximum_ms: 500,
+            },
         };
 
         match from_config_with(cfg, "n1", stub_project_path()) {
@@ -234,6 +260,10 @@ mod tests {
                 cfg_member("n2", 8001, 8000),
                 cfg_member("n3", 9001, 9000),
             ],
+            election_timeout: ElectionTimeoutConfig {
+                minimum_ms: 300,
+                maximum_ms: 500,
+            },
         };
 
         match from_config_with(cfg, "n1", stub_project_path()) {

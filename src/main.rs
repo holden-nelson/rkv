@@ -6,9 +6,11 @@ mod bootstrap;
 mod config;
 mod context;
 mod core;
+mod tasks;
 
-fn main() -> Result<()> {
-    bootstrap_node()?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    bootstrap_node().await?;
 
     Ok(())
 }

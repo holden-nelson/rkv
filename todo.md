@@ -1,7 +1,7 @@
 [x] read Raft paper
 [x] decide api for kv store
 [x] basic main.rs - parse config file and instantiate state
-[ ] implement election timeout mechanism
+[x] implement election timeout mechanism
 [ ] implement RequestVote RPC
 [ ] determine raft log entry format
 [ ] determine request / response contract for raft RPCs

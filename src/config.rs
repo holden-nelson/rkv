@@ -5,6 +5,7 @@ use std::{fs, path::Path};
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    pub election_timeout: ElectionTimeoutConfig,
     pub members: Vec<ClusterMember>,
 }
 
@@ -14,6 +15,13 @@ pub struct ClusterMember {
     pub id: String,
     pub client_addr: String,
     pub raft_addr: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ElectionTimeoutConfig {
+    pub minimum_ms: u32,
+    pub maximum_ms: u32,
 }
 
 pub fn load_config(path: impl AsRef<Path>) -> Result<Config> {
@@ -45,6 +53,8 @@ mod tests {
     #[test]
     fn load_config_reads_valid_toml_into_config_struct() {
         let toml = r#"
+election_timeout = { minimum_ms = 300, maximum_ms = 500 }
+
 members = [
   { id = "n1", raft_addr = "127.0.0.1:7001", client_addr = "127.0.0.1:7000" },
   { id = "n2", raft_addr = "127.0.0.1:8001", client_addr = "127.0.0.1:8000" }
@@ -57,6 +67,9 @@ members = [
 
         // cleanup
         let _ = fs::remove_file(&path);
+
+        assert_eq!(cfg.election_timeout.minimum_ms, 300);
+        assert_eq!(cfg.election_timeout.maximum_ms, 500);
 
         assert_eq!(cfg.members.len(), 2);
 
