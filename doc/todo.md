@@ -2,6 +2,8 @@
 [x] decide api for kv store
 [x] basic main.rs - parse config file and instantiate state
 [x] implement election timeout mechanism
+[x] design RPC network communication protocol
+[ ] implement RPC network communication protocol
 [ ] implement RequestVote RPC
 [ ] determine raft log entry format
 [ ] determine request / response contract for raft RPCs

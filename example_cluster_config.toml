@@ -1,4 +1,4 @@
-election_timeout = { minimum_ms = 300, maximum_ms = 500 }
+election_timeout = { minimum_ms = 500, maximum_ms = 1000 }
 
 members = [
   { id = "node1", raft_addr = "127.0.0.1:9001", client_addr = "127.0.0.1:8081" },
