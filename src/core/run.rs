@@ -1,4 +1,6 @@
 use crate::context::NodeContext;
+use crate::core::rpc::RequestVoteResponse;
+use crate::tasks::rpc_server::server::RpcServer;
 use crate::{core::events::Event, tasks::timer::ElectionTimer};
 
 use tokio::sync::mpsc;
@@ -8,7 +10,10 @@ pub async fn run(ctx: &NodeContext) {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(128);
 
     let election_timeout = get_next_timeout_deadline(ctx);
-    let timer = ElectionTimer::spawn(event_tx, election_timeout);
+    let timer = ElectionTimer::spawn(event_tx.clone(), election_timeout);
+
+    let bind_addr = ctx.raft_addr;
+    RpcServer::spawn(event_tx.clone(), bind_addr);
 
     while let Some(event) = event_rx.recv().await {
         match event {
@@ -16,6 +21,19 @@ pub async fn run(ctx: &NodeContext) {
                 println!("election timed out!");
 
                 let _ = timer.reset_deadline(get_next_timeout_deadline(ctx)).await;
+            }
+            Event::VoteReceived(_v) => {
+                println!("vote received!");
+            }
+            Event::VoteRequestReceived { respond, .. } => {
+                println!("vote request received!");
+
+                let response = RequestVoteResponse {
+                    term: 0,
+                    vote_granted: true,
+                };
+
+                let _ = respond.send(response);
             }
         }
     }

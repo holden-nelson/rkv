@@ -27,16 +27,6 @@ pub struct JsonRpcRequest<T> {
     pub id: Option<JsonRpcId>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct JsonRpcResponse<R> {
-    #[serde(default = "json_rpc_2_0")]
-    pub jsonrpc: String,
-
-    pub id: JsonRpcId,
-
-    pub result: R,
-}
-
 impl<T> JsonRpcRequest<T> {
     pub fn new(method: String, params: Option<T>) -> Self {
         JsonRpcRequest {
@@ -62,7 +52,25 @@ impl<T> JsonRpcRequest<T> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct JsonRpcResponse<R> {
+    #[serde(default = "json_rpc_2_0")]
+    pub jsonrpc: String,
+
+    pub id: JsonRpcId,
+
+    pub result: R,
+}
+
 impl<R> JsonRpcResponse<R> {
+    pub fn new(id: JsonRpcId, result: R) -> Self {
+        JsonRpcResponse {
+            jsonrpc: "2.0".to_owned(),
+            id,
+            result,
+        }
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>>
     where
         R: Serialize,

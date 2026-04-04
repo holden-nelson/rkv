@@ -3,18 +3,20 @@ use serde_json::Value;
 
 use std::net::SocketAddr;
 
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::{
+    net::TcpListener,
+    sync::{mpsc, oneshot},
+};
 
 use crate::{
     core::{
         events::Event,
-        net::{JsonRpcRequest, METHOD_REQUEST_VOTE, read_frame},
+        net::{JsonRpcRequest, JsonRpcResponse, METHOD_REQUEST_VOTE, read_frame, write_frame},
         rpc::RequestVote,
     },
     tasks::rpc_server::voting::send_request_vote,
 };
 pub enum RpcServerCommand {
-    GrantVote,
     RequestVote {
         peer: SocketAddr,
         params: RequestVote,
@@ -56,7 +58,7 @@ impl RpcServer {
 
                                 match req.method.as_str() {
                                     METHOD_REQUEST_VOTE => {
-                                        if req.id.is_none() {
+                                        let Some(id) = req.id else {
                                             return Ok(());
                                         };
 
@@ -65,7 +67,19 @@ impl RpcServer {
                                         let vote_req: RequestVote = serde_json::from_value(params)
                                             .context("decode RequestVote params")?;
 
-                                        event_tx.send(Event::VoteRequestReceived(vote_req)).await?;
+                                        let (respond_tx, respond_rx) = oneshot::channel();
+
+                                        event_tx.send(Event::VoteRequestReceived {
+                                            request: vote_req,
+                                            respond: respond_tx
+                                        }).await?;
+
+                                        let vote_resp = respond_rx.await.context("core dropped response channel")?;
+
+                                        let resp = JsonRpcResponse::new(id, vote_resp);
+
+                                        let bytes = resp.to_bytes()?;
+                                        write_frame(&mut stream, &bytes).await?;
                                     }
                                     _ => break
                                 }
