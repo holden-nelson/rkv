@@ -11,18 +11,11 @@ pub struct NodeContext {
     pub id: String,
     pub client_addr: SocketAddr,
     pub raft_addr: SocketAddr,
-    pub role: NodeRole,
-    pub election_timeout_ms: u32,
+    pub election_timeout_min: u32,
+    pub election_timeout_max: u32,
 
     pub persistence: PersistenceContext,
     pub peers: Vec<ClusterMember>,
-}
-
-#[derive(Debug)]
-pub enum NodeRole {
-    Leader,
-    Candidate,
-    Follower,
 }
 
 #[derive(Debug)]
@@ -103,17 +96,12 @@ fn from_config_with(
 
     let this_member = this_member.unwrap();
 
-    let election_timeout = generate_election_timeout_ms(
-        cfg.election_timeout.minimum_ms,
-        cfg.election_timeout.maximum_ms,
-    )?;
-
     let context = NodeContext {
         id: this_member.id,
         client_addr: this_member.client_addr,
         raft_addr: this_member.raft_addr,
-        election_timeout_ms: election_timeout,
-        role: NodeRole::Follower,
+        election_timeout_min: cfg.election_timeout.minimum_ms,
+        election_timeout_max: cfg.election_timeout.maximum_ms,
         persistence: PersistenceContext { base_dir: data_dir },
         peers: peers,
     };
@@ -139,14 +127,6 @@ fn validate_config_member(member: &config::ClusterMember) -> MemberValidationRes
         client_addr,
         raft_addr,
     })
-}
-
-fn generate_election_timeout_ms(min: u32, max: u32) -> Result<u32, ClusterValidationError> {
-    if min > max {
-        return Err(ClusterValidationError::InvalidElectionTimeout(min, max));
-    }
-
-    Ok(rand::random_range(min..=max))
 }
 
 #[cfg(test)]

@@ -8,10 +8,12 @@ use anyhow::Result;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant};
 
-pub async fn run(ctx: NodeContext, state: NodeState) -> Result<()> {
+pub async fn run(ctx: NodeContext) -> Result<()> {
+    let mut state = NodeState::new(&ctx)?;
+
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(128);
 
-    let election_timeout = get_next_timeout_deadline(&ctx);
+    let election_timeout = get_next_timeout_deadline(&state);
     let timer = ElectionTimer::spawn(event_tx.clone(), election_timeout);
 
     let bind_addr = ctx.raft_addr;
@@ -22,14 +24,18 @@ pub async fn run(ctx: NodeContext, state: NodeState) -> Result<()> {
             Event::ElectionTimeoutFired => {
                 println!(
                     "[{}] election timed out (term={})",
-                    ctx.id, state.persistent_state.current_term
+                    ctx.id,
+                    state.get_current_term()
                 );
+
+                let current_term = state.get_current_term();
+                let (last_term, last_index) = state.get_last_logged_term_and_index();
 
                 let vote_request = RequestVote {
                     candidate_id: ctx.id.to_string(),
-                    term: state.persistent_state.current_term,
-                    last_index: state.volatile_state.last_logged_index,
-                    last_term: state.volatile_state.last_logged_term,
+                    term: current_term,
+                    last_index,
+                    last_term,
                 };
 
                 let server_commands = ctx.peers.iter().map(|p| RpcServerCommand::RequestVote {
@@ -41,7 +47,10 @@ pub async fn run(ctx: NodeContext, state: NodeState) -> Result<()> {
                     rpc_server.cmd_tx.send(cmd).await?;
                 }
 
-                let _ = timer.reset_deadline(get_next_timeout_deadline(&ctx)).await;
+                state.randomize_election_timeout();
+                let _ = timer
+                    .reset_deadline(get_next_timeout_deadline(&state))
+                    .await;
             }
             Event::VoteReceived(v) => {
                 println!(
@@ -74,6 +83,6 @@ pub async fn run(ctx: NodeContext, state: NodeState) -> Result<()> {
     Ok(())
 }
 
-fn get_next_timeout_deadline(ctx: &NodeContext) -> Instant {
-    Instant::now() + Duration::from_millis(ctx.election_timeout_ms.into())
+fn get_next_timeout_deadline(state: &NodeState) -> Instant {
+    Instant::now() + Duration::from_millis(state.get_election_timeout().into())
 }

@@ -1,6 +1,6 @@
 use std::fs::create_dir_all;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::{
     config::load_config,
@@ -15,10 +15,7 @@ pub async fn bootstrap_node(node_id: &str) -> Result<()> {
     // create base dir
     create_dir_all(&context.persistence.base_dir)?;
 
-    let node_state = state::NodeState::new();
-    node_state.persistent_state.write_to_disk(&context)?;
-
-    run::run(context, node_state).await?;
+    run::run(context).await?;
 
     Ok(())
 }
