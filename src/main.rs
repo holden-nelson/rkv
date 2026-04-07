@@ -1,7 +1,5 @@
 use anyhow::Result;
 
-use crate::bootstrap::bootstrap_node;
-
 mod bootstrap;
 mod config;
 mod context;
@@ -10,7 +8,10 @@ mod tasks;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    bootstrap_node().await?;
-
+    tokio::try_join!(
+        bootstrap::bootstrap_node("node1"),
+        bootstrap::bootstrap_node("node2"),
+        bootstrap::bootstrap_node("node3"),
+    )?;
     Ok(())
 }

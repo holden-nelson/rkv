@@ -8,17 +8,17 @@ use crate::{
     core::{run, state},
 };
 
-pub async fn bootstrap_node() -> Result<()> {
+pub async fn bootstrap_node(node_id: &str) -> Result<()> {
     let config = load_config("example_cluster_config.toml")?;
-    let context = NodeContext::from_config(config, "node2")?;
+    let context = NodeContext::from_config(config, node_id)?;
 
     // create base dir
     create_dir_all(&context.persistence.base_dir)?;
 
-    let persistent_state = state::PersistentState::new();
-    persistent_state.write_to_disk(&context)?;
+    let node_state = state::NodeState::new();
+    node_state.persistent_state.write_to_disk(&context)?;
 
-    run::run(&context).await;
+    run::run(context, node_state).await?;
 
     Ok(())
 }
