@@ -9,4 +9,5 @@ pub enum Event {
         respond: Sender<RequestVoteResponse>,
     },
     VoteReceived(RequestVoteResponse),
+    ElectionVictory,
 }

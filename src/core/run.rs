@@ -1,7 +1,7 @@
 use crate::context::NodeContext;
-use crate::core::rpc::{RequestVote, RequestVoteResponse};
 use crate::core::state::NodeState;
-use crate::tasks::rpc_server::server::{RpcServer, RpcServerCommand};
+use crate::core::vote::{become_candidate, handle_incoming_vote_request, handle_vote_received};
+use crate::tasks::rpc_server::server::RpcServer;
 use crate::{core::events::Event, tasks::timer::ElectionTimer};
 
 use anyhow::Result;
@@ -19,6 +19,8 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
     let bind_addr = ctx.raft_addr;
     let rpc_server = RpcServer::spawn(event_tx.clone(), bind_addr);
 
+    let majority = ctx.cluster_size / 2 + 1;
+
     while let Some(event) = event_rx.recv().await {
         match event {
             Event::ElectionTimeoutFired => {
@@ -28,24 +30,7 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     state.get_current_term()
                 );
 
-                let current_term = state.get_current_term();
-                let (last_term, last_index) = state.get_last_logged_term_and_index();
-
-                let vote_request = RequestVote {
-                    candidate_id: ctx.id.to_string(),
-                    term: current_term,
-                    last_index,
-                    last_term,
-                };
-
-                let server_commands = ctx.peers.iter().map(|p| RpcServerCommand::RequestVote {
-                    peer: p.raft_addr,
-                    params: vote_request.clone(),
-                });
-
-                for cmd in server_commands {
-                    rpc_server.cmd_tx.send(cmd).await?;
-                }
+                become_candidate(&ctx, &mut state, &rpc_server).await?;
 
                 state.randomize_election_timeout();
                 let _ = timer
@@ -57,6 +42,12 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     "[{}] vote received: term={}, granted={}",
                     ctx.id, v.term, v.vote_granted
                 );
+
+                let num_votes = handle_vote_received(v, &mut state);
+
+                if num_votes >= majority {
+                    event_tx.send(Event::ElectionVictory).await?;
+                }
             }
             Event::VoteRequestReceived { request, respond } => {
                 println!(
@@ -68,12 +59,18 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     request.last_term
                 );
 
-                let response = RequestVoteResponse {
-                    term: 0,
-                    vote_granted: true,
-                };
+                let response = handle_incoming_vote_request(request, &mut state)?;
 
                 let _ = respond.send(response);
+            }
+            Event::ElectionVictory => {
+                println!(
+                    "[{}] election victorious with {} votes",
+                    ctx.id,
+                    state.get_vote_count()
+                );
+
+                state.to_leader()?;
             }
         }
     }

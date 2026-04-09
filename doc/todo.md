@@ -4,7 +4,7 @@
 [x] implement election timeout mechanism
 [x] design RPC network communication protocol
 [x] implement RPC network communication protocol
-[ ] implement RequestVote RPC
+[x] implement RequestVote RPC
 [ ] determine raft log entry format
 [ ] determine request / response contract for raft RPCs
 [ ] implement AppendEntries

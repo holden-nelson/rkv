@@ -1,12 +1,8 @@
 use std::fs::create_dir_all;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use crate::{
-    config::load_config,
-    context::NodeContext,
-    core::{run, state},
-};
+use crate::{config::load_config, context::NodeContext, core::run};
 
 pub async fn bootstrap_node(node_id: &str) -> Result<()> {
     let config = load_config("example_cluster_config.toml")?;

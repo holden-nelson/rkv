@@ -13,6 +13,7 @@ pub struct NodeContext {
     pub raft_addr: SocketAddr,
     pub election_timeout_min: u32,
     pub election_timeout_max: u32,
+    pub cluster_size: u32,
 
     pub persistence: PersistenceContext,
     pub peers: Vec<ClusterMember>,
@@ -102,6 +103,7 @@ fn from_config_with(
         raft_addr: this_member.raft_addr,
         election_timeout_min: cfg.election_timeout.minimum_ms,
         election_timeout_max: cfg.election_timeout.maximum_ms,
+        cluster_size: (peers.len() + 1) as u32,
         persistence: PersistenceContext { base_dir: data_dir },
         peers: peers,
     };
