@@ -17,6 +17,7 @@ pub async fn become_candidate(
     state.to_candidate();
     state.increment_term()?;
     state.vote_for(&ctx.id)?;
+    state.record_vote();
 
     let current_term = state.get_current_term();
     let (last_term, last_index) = state.get_last_logged_term_and_index();
@@ -75,7 +76,7 @@ pub fn handle_incoming_vote_request(
     })
 }
 
-pub fn handle_vote_received(r: RequestVoteResponse, state: &mut NodeState) -> u32 {
+pub fn handle_vote_received(r: RequestVoteResponse, state: &mut NodeState) -> Option<u32> {
     let mut votes_received = state.get_vote_count();
 
     if r.vote_granted {

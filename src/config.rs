@@ -5,6 +5,7 @@ use std::{fs, path::Path};
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    pub heartbeat_interval: u32,
     pub election_timeout: ElectionTimeoutConfig,
     pub members: Vec<ClusterMember>,
 }
@@ -53,6 +54,8 @@ mod tests {
     #[test]
     fn load_config_reads_valid_toml_into_config_struct() {
         let toml = r#"
+heartbeat_interval = 100
+
 election_timeout = { minimum_ms = 300, maximum_ms = 500 }
 
 members = [

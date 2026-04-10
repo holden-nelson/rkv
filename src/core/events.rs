@@ -1,6 +1,6 @@
 use tokio::sync::oneshot::Sender;
 
-use crate::core::rpc::{RequestVote, RequestVoteResponse};
+use crate::core::rpc::{AppendEntries, AppendEntriesResponse, RequestVote, RequestVoteResponse};
 
 pub enum Event {
     ElectionTimeoutFired,
@@ -10,4 +10,10 @@ pub enum Event {
     },
     VoteReceived(RequestVoteResponse),
     ElectionVictory,
+    HeartbeatTimerFired,
+    AppendEntriesReceived {
+        request: AppendEntries,
+        respond: Sender<AppendEntriesResponse>,
+    },
+    AppendEntriesResponse(AppendEntriesResponse),
 }

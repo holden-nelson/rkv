@@ -1,4 +1,6 @@
+mod entries;
 pub mod events;
+mod log;
 pub mod net;
 pub mod rpc;
 pub mod run;

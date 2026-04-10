@@ -5,8 +5,9 @@
 [x] design RPC network communication protocol
 [x] implement RPC network communication protocol
 [x] implement RequestVote RPC
-[ ] determine raft log entry format
-[ ] determine request / response contract for raft RPCs
+[x] determine raft log entry format
+[x] implement heartbeat mechanism
+[ ] implement client API
 [ ] implement AppendEntries
 [ ] implement raft entry --> kv entry
 [ ] implement redirects for requests to followers

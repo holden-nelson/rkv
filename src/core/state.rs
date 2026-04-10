@@ -120,20 +120,20 @@ impl NodeState {
         self.persistent_state.voted_for.is_some()
     }
 
-    pub fn get_vote_count(&self) -> u32 {
+    pub fn get_vote_count(&self) -> Option<u32> {
         match &self.volatile_state.role {
-            RoleState::Candidate { votes_received } => *votes_received,
-            _ => panic!("record_vote called when not a candidate"),
+            RoleState::Candidate { votes_received } => Some(*votes_received),
+            _ => None,
         }
     }
 
-    pub fn record_vote(&mut self) -> u32 {
+    pub fn record_vote(&mut self) -> Option<u32> {
         match &mut self.volatile_state.role {
             RoleState::Candidate { votes_received } => {
                 *votes_received += 1;
-                *votes_received
+                Some(*votes_received)
             }
-            _ => panic!("record_vote called when not a candidate"),
+            _ => None,
         }
     }
 
@@ -163,6 +163,10 @@ impl NodeState {
             self.volatile_state.last_logged_term,
             self.volatile_state.last_logged_index,
         )
+    }
+
+    pub fn get_commit_index(&self) -> u64 {
+        self.volatile_state.commit_index
     }
 
     pub fn get_election_timeout(&self) -> u32 {

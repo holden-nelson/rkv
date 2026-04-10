@@ -14,6 +14,7 @@ pub struct NodeContext {
     pub election_timeout_min: u32,
     pub election_timeout_max: u32,
     pub cluster_size: u32,
+    pub heartbeat_interval: u32,
 
     pub persistence: PersistenceContext,
     pub peers: Vec<ClusterMember>,
@@ -101,6 +102,7 @@ fn from_config_with(
         id: this_member.id,
         client_addr: this_member.client_addr,
         raft_addr: this_member.raft_addr,
+        heartbeat_interval: cfg.heartbeat_interval,
         election_timeout_min: cfg.election_timeout.minimum_ms,
         election_timeout_max: cfg.election_timeout.maximum_ms,
         cluster_size: (peers.len() + 1) as u32,
@@ -202,6 +204,7 @@ mod tests {
                 minimum_ms: 300,
                 maximum_ms: 500,
             },
+            heartbeat_interval: 100,
         };
 
         match from_config_with(cfg, "n3", stub_project_path()) {
@@ -222,6 +225,7 @@ mod tests {
                 minimum_ms: 300,
                 maximum_ms: 500,
             },
+            heartbeat_interval: 100,
         };
 
         match from_config_with(cfg, "n1", stub_project_path()) {
@@ -246,6 +250,7 @@ mod tests {
                 minimum_ms: 300,
                 maximum_ms: 500,
             },
+            heartbeat_interval: 100,
         };
 
         match from_config_with(cfg, "n1", stub_project_path()) {

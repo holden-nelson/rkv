@@ -1,3 +1,5 @@
+heartbeat_interval = 100
+
 election_timeout = { minimum_ms = 500, maximum_ms = 1000 }
 
 members = [

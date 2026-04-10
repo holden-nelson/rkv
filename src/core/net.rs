@@ -131,3 +131,4 @@ pub async fn read_frame<R: AsyncRead + Unpin>(r: &mut R) -> io::Result<Option<Ve
 }
 
 pub const METHOD_REQUEST_VOTE: &str = "raft.request_vote";
+pub const METHOD_APPEND_ENTRIES: &str = "raft.append_entries";

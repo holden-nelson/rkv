@@ -8,15 +8,22 @@ use tokio::{net::TcpListener, sync::mpsc};
 use crate::{
     core::{
         events::Event,
-        net::{JsonRpcRequest, METHOD_REQUEST_VOTE, read_frame},
-        rpc::RequestVote,
+        net::{JsonRpcRequest, METHOD_APPEND_ENTRIES, METHOD_REQUEST_VOTE, read_frame},
+        rpc::{AppendEntries, RequestVote},
     },
-    tasks::rpc_server::vote::{handle_request_vote, send_request_vote},
+    tasks::rpc_server::{
+        entries::{handle_append_entries, send_append_entries},
+        vote::{handle_request_vote, send_request_vote},
+    },
 };
 pub enum RpcServerCommand {
     RequestVote {
         peer: SocketAddr,
         params: RequestVote,
+    },
+    AppendEntries {
+        peer: SocketAddr,
+        params: AppendEntries,
     },
 }
 
@@ -37,12 +44,20 @@ impl RpcServer {
                     cmd = cmd_rx.recv() => {
                         match cmd {
                             Some(RpcServerCommand::RequestVote { peer, params }) => {
-                                let event_tx2 = event_tx.clone();
+                                let event_tx_clone = event_tx.clone();
                                 tokio::spawn(async move {
                                     let response = send_request_vote(peer, params).await.unwrap();
-                                    let _ = event_tx2.send(Event::VoteReceived(response)).await;
+                                    let _ = event_tx_clone.send(Event::VoteReceived(response)).await;
                                 });
                             }
+                            Some(RpcServerCommand::AppendEntries { peer, params }) => {
+                                let event_tx_clone = event_tx.clone();
+                                tokio::spawn(async move {
+                                    let response = send_append_entries(peer, params).await.unwrap();
+                                    let _ = event_tx_clone.send(Event::AppendEntriesResponse(response)).await;
+                                });
+                            }
+
                             _ => break
                         }
                     }
@@ -58,6 +73,7 @@ impl RpcServer {
 
                                 match req.method.as_str() {
                                     METHOD_REQUEST_VOTE => handle_request_vote(req, &mut stream, &event_tx).await?,
+                                    METHOD_APPEND_ENTRIES => handle_append_entries(req, &mut stream, &event_tx).await?,
                                     _ => break
                                 }
                             }
