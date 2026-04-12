@@ -3,6 +3,8 @@ use crate::core::entries::send_heartbeats;
 use crate::core::rpc::AppendEntriesResponse;
 use crate::core::state::NodeState;
 use crate::core::vote::{become_candidate, handle_incoming_vote_request, handle_vote_received};
+use crate::tasks::api_server;
+use crate::tasks::api_server::server::{ApiEvent, ApiServer};
 use crate::tasks::heartbeat_timer::HeartbeatTimer;
 use crate::tasks::rpc_server::server::RpcServer;
 use crate::{core::events::Event, tasks::election_timer::ElectionTimer};
@@ -21,6 +23,8 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
 
     let bind_addr = ctx.raft_addr;
     let rpc_server = RpcServer::spawn(event_tx.clone(), bind_addr);
+
+    let _api_server = ApiServer::spawn(event_tx.clone(), ctx.client_addr);
 
     let heartbeat_timer = HeartbeatTimer::spawn(event_tx.clone(), ctx.heartbeat_interval);
 
@@ -114,6 +118,21 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     "[{}] append entries response received: success {}",
                     ctx.id, r.success
                 );
+            }
+            Event::ClientRequestReceived(e) => {
+                println!("[{}] api request received {:?}", ctx.id, e);
+
+                match e {
+                    ApiEvent::Put { respond, .. } => {
+                        let _ = respond.send(Ok(())); // makes PUT return 204
+                    }
+                    ApiEvent::Delete { respond, .. } => {
+                        let _ = respond.send(Ok(())); // makes DELETE return 204
+                    }
+                    ApiEvent::Get { respond, .. } => {
+                        let _ = respond.send(Ok(None)); // makes GET return 404 in your handler
+                    }
+                }
             }
         }
     }
