@@ -3,7 +3,6 @@ use crate::core::entries::send_heartbeats;
 use crate::core::rpc::AppendEntriesResponse;
 use crate::core::state::NodeState;
 use crate::core::vote::{become_candidate, handle_incoming_vote_request, handle_vote_received};
-use crate::tasks::api_server;
 use crate::tasks::api_server::server::{ApiEvent, ApiServer};
 use crate::tasks::heartbeat_timer::HeartbeatTimer;
 use crate::tasks::rpc_server::server::RpcServer;
@@ -12,6 +11,7 @@ use crate::{core::events::Event, tasks::election_timer::ElectionTimer};
 use anyhow::Result;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant};
+use tracing::{debug, info};
 
 pub async fn run(ctx: NodeContext) -> Result<()> {
     let mut state = NodeState::new(&ctx)?;
@@ -33,7 +33,7 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
     while let Some(event) = event_rx.recv().await {
         match event {
             Event::ElectionTimeoutFired => {
-                println!(
+                info!(
                     "[{}] election timed out (term={})",
                     ctx.id.to_string(),
                     state.get_current_term()
@@ -47,7 +47,7 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     .await;
             }
             Event::VoteReceived(v) => {
-                println!(
+                debug!(
                     "[{}] vote received: term={}, granted={}",
                     ctx.id, v.term, v.vote_granted
                 );
@@ -59,7 +59,7 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                 };
             }
             Event::VoteRequestReceived { request, respond } => {
-                println!(
+                debug!(
                     "[{}] vote request received from {} (term={}, last_index={}, last_term={})",
                     ctx.id,
                     request.candidate_id,
@@ -77,7 +77,7 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                 let _ = respond.send(response);
             }
             Event::ElectionVictory => {
-                println!(
+                info!(
                     "[{}] election victorious with {} votes",
                     ctx.id,
                     state.get_vote_count().unwrap()
@@ -89,18 +89,18 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                 heartbeat_timer.start().await?;
             }
             Event::HeartbeatTimerFired => {
-                println!("[{}] heartbeat timer fired", ctx.id);
+                debug!("[{}] heartbeat timer fired", ctx.id);
 
                 send_heartbeats(&ctx, &state, &rpc_server).await?;
             }
             Event::AppendEntriesReceived { request, respond } => {
-                println!(
+                debug!(
                     "[{}] append entry received from {}",
                     ctx.id, request.leader_id
                 );
 
                 if request.entries.is_empty() {
-                    println!("[{}] entry was a heartbeat", ctx.id);
+                    debug!("[{}] entry was a heartbeat", ctx.id);
                 }
 
                 election_timer
@@ -114,13 +114,13 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                 let _ = respond.send(response);
             }
             Event::AppendEntriesResponse(r) => {
-                println!(
+                debug!(
                     "[{}] append entries response received: success {}",
                     ctx.id, r.success
                 );
             }
             Event::ClientRequestReceived(e) => {
-                println!("[{}] api request received {:?}", ctx.id, e);
+                info!("[{}] api request received {:?}", ctx.id, e);
 
                 match e {
                     ApiEvent::Put { respond, .. } => {
