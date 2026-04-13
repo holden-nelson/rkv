@@ -1,5 +1,8 @@
+use std::fs::create_dir_all;
+
 use crate::context::NodeContext;
 use crate::core::entries::send_heartbeats;
+use crate::core::log::LogStore;
 use crate::core::rpc::AppendEntriesResponse;
 use crate::core::state::NodeState;
 use crate::core::vote::{become_candidate, handle_incoming_vote_request, handle_vote_received};
@@ -14,7 +17,13 @@ use tokio::time::{Duration, Instant};
 use tracing::{debug, info};
 
 pub async fn run(ctx: NodeContext) -> Result<()> {
-    let mut state = NodeState::new(&ctx)?;
+    let log_dir = ctx.persistence.base_dir.join("log");
+    create_dir_all(&log_dir)?;
+
+    let log_store_path = log_dir.join("entries.log");
+    let log_store = LogStore::open(log_store_path)?;
+
+    let mut state = NodeState::new(&ctx, log_store)?;
 
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(128);
 

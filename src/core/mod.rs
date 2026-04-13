@@ -1,3 +1,4 @@
+mod api;
 mod entries;
 pub mod events;
 mod log;

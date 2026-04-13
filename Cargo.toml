@@ -19,6 +19,7 @@ percent-encoding = "2"
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+crc32fast = "1"
 
 [dev-dependencies]
 tokio = { version = "1.50.0", features = ["test-util"] }

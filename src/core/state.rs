@@ -3,7 +3,10 @@ use std::{collections::HashMap, io, path::PathBuf};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::{context::NodeContext, core::storage::atomic_write};
+use crate::{
+    context::NodeContext,
+    core::{log::LogStore, storage::atomic_write},
+};
 
 #[derive(Serialize, Deserialize)]
 struct PersistentState {
@@ -82,15 +85,17 @@ enum RoleState {
 pub struct NodeState {
     persistent_state: PersistentState,
     volatile_state: VolatileState,
+    pub log_store: LogStore,
 }
 
 impl NodeState {
-    pub fn new(ctx: &NodeContext) -> Result<Self> {
+    pub fn new(ctx: &NodeContext, log_store: LogStore) -> Result<Self> {
         let persistent_state = PersistentState::new(ctx)?;
 
         Ok(NodeState {
             persistent_state,
             volatile_state: VolatileState::new(ctx),
+            log_store,
         })
     }
 
