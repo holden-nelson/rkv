@@ -3,6 +3,7 @@ mod entries;
 pub mod events;
 mod log;
 pub mod net;
+mod replication;
 pub mod rpc;
 pub mod run;
 pub mod state;

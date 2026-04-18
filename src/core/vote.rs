@@ -20,7 +20,7 @@ pub async fn become_candidate(
     state.record_vote();
 
     let current_term = state.get_current_term();
-    let (last_term, last_index) = state.get_last_logged_term_and_index();
+    let (last_term, last_index) = state.get_last_logged_term_and_index()?;
 
     let vote_request = RequestVote {
         candidate_id: ctx.id.to_string(),
@@ -59,7 +59,7 @@ pub fn handle_incoming_vote_request(
         return Ok(deny_response);
     }
 
-    let (last_term, last_index) = state.get_last_logged_term_and_index();
+    let (last_term, last_index) = state.get_last_logged_term_and_index()?;
     if v.last_term < last_term {
         return Ok(deny_response);
     }

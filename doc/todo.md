@@ -7,9 +7,9 @@
 [x] implement RequestVote RPC
 [x] determine raft log entry format
 [x] implement heartbeat mechanism
-[ ] implement client API
+[ ] implement client API (assume leader)
 [ ] implement AppendEntries
-[ ] implement raft entry --> kv entry
+[ ] implement raft entry --> kv entry (committing log entries)
 [ ] implement redirects for requests to followers
 [ ] implement log compaction / snapshotting
 [ ] implement InstallSnapshot RPC

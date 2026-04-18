@@ -1,9 +1,11 @@
 use std::fs::create_dir_all;
 
 use crate::context::NodeContext;
+use crate::core::api::{handle_delete, handle_put};
 use crate::core::entries::send_heartbeats;
 use crate::core::log::LogStore;
-use crate::core::rpc::AppendEntriesResponse;
+use crate::core::replication::try_replicate;
+use crate::core::rpc::{AppendEntriesResponse, handle_append_entries};
 use crate::core::state::NodeState;
 use crate::core::vote::{become_candidate, handle_incoming_vote_request, handle_vote_received};
 use crate::tasks::api_server::server::{ApiEvent, ApiServer};
@@ -92,33 +94,30 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     state.get_vote_count().unwrap()
                 );
 
-                state.to_leader()?;
+                state.to_leader(&ctx)?;
                 election_timer.stop().await;
-                send_heartbeats(&ctx, &state, &rpc_server).await?;
+                try_replicate(&ctx, &mut state, &rpc_server).await?;
                 heartbeat_timer.start().await?;
             }
             Event::HeartbeatTimerFired => {
                 debug!("[{}] heartbeat timer fired", ctx.id);
 
-                send_heartbeats(&ctx, &state, &rpc_server).await?;
+                try_replicate(&ctx, &mut state, &rpc_server).await?;
             }
             Event::AppendEntriesReceived { request, respond } => {
-                debug!(
-                    "[{}] append entry received from {}",
-                    ctx.id, request.leader_id
-                );
-
-                if request.entries.is_empty() {
-                    debug!("[{}] entry was a heartbeat", ctx.id);
-                }
+                let success = handle_append_entries(&ctx, &mut state, request)?;
 
                 election_timer
                     .reset_deadline(get_next_timeout_deadline(&state))
                     .await?;
 
+                let (_, last_index) = state.get_last_logged_term_and_index()?;
+
                 let response = AppendEntriesResponse {
+                    node_id: ctx.id.clone(),
                     term: state.get_current_term(),
-                    success: true,
+                    last_index,
+                    success,
                 };
                 let _ = respond.send(response);
             }
@@ -132,10 +131,18 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                 info!("[{}] api request received {:?}", ctx.id, e);
 
                 match e {
-                    ApiEvent::Put { respond, .. } => {
+                    ApiEvent::Put {
+                        key,
+                        value,
+                        respond,
+                    } => {
+                        let _ = handle_put(&mut state, key, value)?;
+                        try_replicate(&ctx, &mut state, &rpc_server).await?;
                         let _ = respond.send(Ok(())); // makes PUT return 204
                     }
-                    ApiEvent::Delete { respond, .. } => {
+                    ApiEvent::Delete { key, respond } => {
+                        handle_delete(&mut state, key)?;
+                        try_replicate(&ctx, &mut state, &rpc_server).await?;
                         let _ = respond.send(Ok(())); // makes DELETE return 204
                     }
                     ApiEvent::Get { respond, .. } => {

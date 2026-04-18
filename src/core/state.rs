@@ -2,10 +2,11 @@ use std::{collections::HashMap, io, path::PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 use crate::{
     context::NodeContext,
-    core::{log::LogStore, storage::atomic_write},
+    core::{log::LogStore, replication::FollowerReplicationState, storage::atomic_write},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -77,8 +78,8 @@ enum RoleState {
         votes_received: u32,
     },
     Leader {
-        next_index: HashMap<String, u64>,
-        match_index: HashMap<String, u64>,
+        replication_state: HashMap<String, FollowerReplicationState>,
+        pending_client_requests_by_index: HashMap<u64, oneshot::Sender<Result<()>>>,
     },
 }
 
@@ -153,25 +154,43 @@ impl NodeState {
         self.volatile_state.role = RoleState::Candidate { votes_received: 0 };
     }
 
-    pub fn to_leader(&mut self) -> Result<()> {
+    pub fn to_leader(&mut self, ctx: &NodeContext) -> Result<()> {
+        let last_index = self.log_store.last_index();
+        let replication_state = ctx
+            .peers
+            .iter()
+            .map(|peer| {
+                (
+                    peer.id.clone(),
+                    FollowerReplicationState {
+                        next_index: last_index + 1,
+                        match_index: 0,
+                        inflight: false,
+                        needs_replicated_to: true,
+                    },
+                )
+            })
+            .collect();
+
         self.volatile_state.role = RoleState::Leader {
-            next_index: HashMap::new(),
-            match_index: HashMap::new(),
+            replication_state,
+            pending_client_requests_by_index: HashMap::new(),
         };
         self.clear_vote()?;
 
         Ok(())
     }
 
-    pub fn get_last_logged_term_and_index(&self) -> (u64, u64) {
-        (
-            self.volatile_state.last_logged_term,
-            self.volatile_state.last_logged_index,
-        )
+    pub fn get_last_logged_term_and_index(&mut self) -> Result<(u64, u64)> {
+        Ok((self.log_store.last_term()?, self.log_store.last_index()))
     }
 
     pub fn get_commit_index(&self) -> u64 {
         self.volatile_state.commit_index
+    }
+
+    pub fn set_commit_index(&mut self, index: u64) {
+        self.volatile_state.commit_index = index;
     }
 
     pub fn get_election_timeout(&self) -> u32 {
@@ -180,6 +199,15 @@ impl NodeState {
 
     pub fn randomize_election_timeout(&mut self) -> u32 {
         self.volatile_state.randomize_election_timeout()
+    }
+
+    pub fn get_replication_state(&self) -> Option<&HashMap<String, FollowerReplicationState>> {
+        match &self.volatile_state.role {
+            RoleState::Leader {
+                replication_state, ..
+            } => Some(replication_state),
+            _ => None,
+        }
     }
 }
 
