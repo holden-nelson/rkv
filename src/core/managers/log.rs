@@ -26,13 +26,13 @@ pub enum CommandKind {
 
 const MAX_RECORD_LEN: u32 = 4 * 1024 * 1024;
 
-pub struct LogStore {
+pub struct LogManager {
     path: PathBuf,
     file: File,
     offsets: Vec<u64>,
 }
 
-impl LogStore {
+impl LogManager {
     pub fn open(path: impl Into<PathBuf>) -> io::Result<Self> {
         let path = path.into();
 

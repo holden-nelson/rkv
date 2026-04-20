@@ -13,7 +13,7 @@ use crate::tasks::heartbeat_timer::HeartbeatTimer;
 use crate::tasks::rpc_server::server::RpcServer;
 use crate::{core::events::Event, tasks::election_timer::ElectionTimer};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant};
 use tracing::{debug, info};
@@ -126,6 +126,20 @@ pub async fn run(ctx: NodeContext) -> Result<()> {
                     "[{}] append entries response received: success {}",
                     ctx.id, r.success
                 );
+
+                let replication_state = state
+                    .get_follower_replication_state_mut(&r.node_id)
+                    .context(format!("couldn't find replication state for {}", r.node_id))?;
+
+                if r.success {
+                    replication_state.match_index = r.last_index;
+
+                    replication_state.inflight = false;
+                    replication_state.next_index = r.last_index + 1;
+                    replication_state.needs_replicated_to = true;
+                }
+
+                try_replicate(&ctx, &mut state, &rpc_server).await?;
             }
             Event::ClientRequestReceived(e) => {
                 info!("[{}] api request received {:?}", ctx.id, e);

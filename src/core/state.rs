@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -206,6 +206,18 @@ impl NodeState {
             RoleState::Leader {
                 replication_state, ..
             } => Some(replication_state),
+            _ => None,
+        }
+    }
+
+    pub fn get_follower_replication_state_mut(
+        &mut self,
+        node_id: &str,
+    ) -> Option<&mut FollowerReplicationState> {
+        match &mut self.volatile_state.role {
+            RoleState::Leader {
+                replication_state, ..
+            } => replication_state.get_mut(node_id),
             _ => None,
         }
     }

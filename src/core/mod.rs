@@ -1,7 +1,7 @@
 mod api;
-mod entries;
 pub mod events;
 mod log;
+mod managers;
 pub mod net;
 mod replication;
 pub mod rpc;
