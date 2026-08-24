@@ -1,35 +1,32 @@
 use anyhow::{Ok, Result};
 
 use crate::{
-    context::NodeContext,
     core::{
-        rpc::{RequestVote, RequestVoteResponse},
-        state::NodeState,
+        managers::{config::ConfigurationManager, lifecycle::NodeLifecycleManager, log::{LogManager}}, rpc::{RequestVote, RequestVoteResponse}, state::NodeState
     },
     tasks::rpc_server::server::{RpcServer, RpcServerCommand},
 };
 
 pub async fn become_candidate(
-    ctx: &NodeContext,
-    state: &mut NodeState,
+    cfg: &ConfigurationManager,
+    node_mgr: &mut NodeLifecycleManager,
+    log_mgr: &mut LogManager,
     rpc_server: &RpcServer,
 ) -> Result<()> {
-    state.to_candidate();
-    state.increment_term()?;
-    state.vote_for(&ctx.id)?;
-    state.record_vote();
+    node_mgr.to_candidate()?;
 
-    let current_term = state.get_current_term();
-    let (last_term, last_index) = state.get_last_logged_term_and_index()?;
+    let current_term = node_mgr.get_current_term();
+    let last_term = log_mgr.last_term()?;
+    let last_index = log_mgr.last_index();
 
     let vote_request = RequestVote {
-        candidate_id: ctx.id.to_string(),
+        candidate_id: cfg.id.to_string(),
         term: current_term,
         last_index,
         last_term,
     };
 
-    let server_commands = ctx.peers.iter().map(|p| RpcServerCommand::RequestVote {
+    let server_commands = cfg.peers.iter().map(|p| RpcServerCommand::RequestVote {
         peer: p.raft_addr,
         params: vote_request.clone(),
     });
@@ -42,10 +39,10 @@ pub async fn become_candidate(
 }
 
 pub fn handle_incoming_vote_request(
+    node_mgr: &mut NodeLifecycleManager,
     v: RequestVote,
-    state: &mut NodeState,
 ) -> Result<RequestVoteResponse> {
-    let current_term = state.get_current_term();
+    let current_term = node_mgr.get_current_term();
     let deny_response = RequestVoteResponse {
         term: current_term,
         vote_granted: false,

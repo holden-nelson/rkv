@@ -2,10 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::{
-    context::NodeContext,
-    core::{log::LogEntry, state::NodeState},
-};
+use crate::core::managers::{config::ConfigurationManager, lifecycle::NodeLifecycleManager, log::{LogEntry, LogManager}};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RequestVote {
@@ -40,25 +37,26 @@ pub struct AppendEntriesResponse {
 }
 
 pub fn handle_append_entries(
-    ctx: &NodeContext,
-    state: &mut NodeState,
+    cfg: &ConfigurationManager,
+    node_mgr: &mut NodeLifecycleManager,
+    log_mgr: &mut LogManager,
     request: AppendEntries,
 ) -> Result<bool> {
     if request.entries.is_empty() {
-        debug!("[{}] heartbeat from {}", ctx.id, request.leader_id);
+        debug!("[{}] heartbeat from {}", cfg.id, request.leader_id);
         return Ok(true);
     } else {
         debug!(
             "[{}] append entry received from {}",
-            ctx.id, request.leader_id
+            cfg.id, request.leader_id
         );
 
-        if request.term < state.get_current_term() {
+        if request.term < node_mgr.get_current_term() {
             return Ok(false);
         }
 
         if request.prev_log_index != 0 {
-            let Some(prev_entry) = state.log_store.get_entry_at_index(request.prev_log_index)?
+            let Some(prev_entry) = log_mgr.get_entry_at_index(request.prev_log_index)?
             else {
                 return Ok(false);
             };
@@ -69,13 +67,13 @@ pub fn handle_append_entries(
         }
 
         for (i, entry) in request.entries.iter().enumerate() {
-            match state.log_store.get_entry_at_index(entry.index)? {
+            match log_mgr.get_entry_at_index(entry.index)? {
                 Some(logged_entry) => {
                     if logged_entry.term == entry.term {
                         continue;
                     }
 
-                    state.log_store.append_entries_from(
+                    log_mgr.append_entries_from(
                         entry.index,
                         &request.entries[i..],
                         true,
@@ -83,8 +81,7 @@ pub fn handle_append_entries(
                     break;
                 }
                 None => {
-                    state
-                        .log_store
+                    log_mgr
                         .append_entries(&request.entries[i..], true)?;
                     break;
                 }
@@ -92,11 +89,10 @@ pub fn handle_append_entries(
         }
     }
 
-    if request.leader_commit_index > state.get_commit_index() {
-        state.set_commit_index(
-            request
+    if request.leader_commit_index > node_mgr.commit_index {
+        node_mgr.commit_index = request
                 .leader_commit_index
-                .min(state.log_store.last_index()),
+                .min(log_mgr.last_index(),
         );
     }
 

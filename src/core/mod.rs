@@ -1,9 +1,7 @@
 mod api;
 pub mod events;
-mod log;
 mod managers;
 pub mod net;
-mod replication;
 pub mod rpc;
 pub mod run;
 pub mod state;

@@ -3,7 +3,7 @@ use std::{collections::HashSet, io, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 
-use crate::core::{events::Event, storage::atomic_write};
+use crate::core::{events::Event, managers::config::ConfigurationManager, storage::atomic_write};
 
 pub struct NodeLifecycleManager {
     node_id: String,
@@ -15,7 +15,19 @@ pub struct NodeLifecycleManager {
 }
 
 impl NodeLifecycleManager {
-    pub fn new() -> Self {}
+    pub fn new(
+        cfg: &ConfigurationManager,
+        event_tx: Sender<Event>
+    ) -> io::Result<Self> {
+        Ok(NodeLifecycleManager { 
+            node_id: cfg.id.to_string(), 
+            event_tx, 
+            current_role: Role::Follower, 
+            persistent_state: PersistentState::new(cfg.base_dir.clone())?, 
+            election_majority: cfg.get_majority(), 
+            commit_index: 0 
+        })
+    }
 
     pub async fn record_vote(&mut self, vote: Vote) {
         if let Role::Candidate { election } = &mut self.current_role {
@@ -35,18 +47,20 @@ impl NodeLifecycleManager {
         self.persistent_state.get_current_term()
     }
 
-    fn to_candidate(&mut self) {
+    pub fn to_candidate(&mut self) -> io::Result<()> {
         self.current_role = Role::Candidate {
             election: Election::new(self.node_id.clone()),
         };
-        self.persistent_state.increment_term();
+        self.persistent_state.increment_term()?;
+
+        Ok(())
     }
 
-    fn to_leader(&mut self) {
+    pub fn to_leader(&mut self) {
         self.current_role = Role::Leader;
     }
 
-    fn to_follower(&mut self, term: u64) -> io::Result<()> {
+    pub fn to_follower(&mut self, term: u64) -> io::Result<()> {
         self.current_role = Role::Follower;
         self.persistent_state.update_term(term)?;
         Ok(())

@@ -1,4 +1,4 @@
-mod config;
-mod lifecycle;
-mod log;
-mod replication;
+pub mod config;
+pub mod lifecycle;
+pub mod log;
+pub mod replication;
